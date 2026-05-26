@@ -23,7 +23,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:7
+    image: redis/redis-stack-server:latest
     container_name: myagent-redis
     command: ["redis-server", "--appendonly", "yes"]
     ports:

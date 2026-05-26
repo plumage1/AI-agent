@@ -7,7 +7,6 @@ from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel,Field
 
-from agents.chat_agent import chat_with_memory
 from agents.career_agent import (
     analyze_jd_file,
     analyze_jd_text,
@@ -25,8 +24,8 @@ from agents.interview_agent import (
 )
 from agents.job_workflow_agent import run_job_workflow
 from evals.eval_runner import run_all_evals, run_career_eval, run_rag_eval
-from prompts.job_coach_prompt import SYSTEM_PROMPT
 from core.config import settings
+from core.langgraph_checkpoint import get_checkpointer_status
 from core.redis_client import redis_client
 from rag.chroma_store import get_chroma_status, rebuild_chroma_index, reset_chroma_index
 from rag.document_loader import extract_document_text, load_document_as_markdown
@@ -39,9 +38,8 @@ from rag.knowledge_store import (
 )
 from rag.rag_chain import DEFAULT_RETRIEVER, retrieve_sources
 from rag.simple_retriever import load_chunks
-from agents.router import route_user_input
-from agents.tool_executor import run_tool
-from tools.registry import TOOLS
+from agents.langgraph_runtime import run_langgraph_agent_turn
+from tools.registry import TOOLS, tool_schemas
 from stores.session_store import (
     get_session,
     save_session,
@@ -49,11 +47,10 @@ from stores.session_store import (
     delete_session,
     list_sessions as list_session_ids,
     get_session_ttl,
+    reset_chat_session,
 )
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-traces = []
 app = FastAPI(title=settings.app_name)
 BASE_DIR = Path(__file__).resolve().parent.parent
 WEB_DIR = BASE_DIR / "web"
@@ -141,6 +138,8 @@ class SessionDetailResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     redis: bool
+    checkpointer_backend: str
+    checkpointer_detail: str
 
 class RagSearchRequest(BaseModel):
     query: str
@@ -292,47 +291,31 @@ def chat(request: ChatRequest):
     messages = session["messages"]
     traces = session["traces"]
 
-    route = route_user_input(request.message)
-
-    if route.get("use_tool"):
-        before_trace_count = len(traces)
-
-        answer = run_tool(request.message, route, messages, traces)
-
-        trace_id = None
-        if len(traces) > before_trace_count:
-            trace_id = len(traces) - 1
-
-        sources = []
-        citations = []
-
-        if trace_id is not None:
-            trace = traces[trace_id]
-            sources = trace.get("metadata", {}).get("sources", [])
-            citations = trace.get("metadata", {}).get("citations", [])
-
-        save_session(request.session_id, session)
-
-        return ChatResponse(
-            answer=answer,
-            used_tool=True,
-            tool_name=route.get("tool_name"),
-            trace_id=trace_id,
-            sources=sources,
-            citations=citations,
+    try:
+        result = run_langgraph_agent_turn(
+            request.message,
+            messages,
+            traces,
+            session_id=request.session_id,
         )
-
-    answer = chat_with_memory(messages, request.message)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.exception("Chat request failed")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat request failed: {e}",
+        )
 
     save_session(request.session_id, session)
 
     return ChatResponse(
-        answer=answer,
-        used_tool=False,
-        tool_name=None,
-        trace_id=None,
-        sources=[],
-        citations=[],
+        answer=result["answer"],
+        used_tool=result["used_tool"],
+        tool_name=result["tool_name"],
+        trace_id=result["trace_id"],
+        sources=result["sources"],
+        citations=result["citations"],
     )
 @app.get("/trace", response_model=TraceResponse)
 def get_trace(session_id: str = "default", _admin: bool = Depends(require_admin)):
@@ -355,26 +338,24 @@ def get_single_trace(
 
 @app.post("/clear", response_model=ClearResponse)
 def clear_memory(session_id: str = "default", _admin: bool = Depends(require_admin)):
-    session = require_session(session_id)
-
-    session["messages"].clear()
-    session["messages"].append({"role": "system", "content": SYSTEM_PROMPT})
-
-    session["traces"].clear()
-
-    save_session(session_id, session)
+    session = reset_chat_session(session_id)
 
     return ClearResponse(message=f"Session {session_id} cleared.")
 
 @app.get("/tools", response_model=ToolsResponse)
 def get_tools():
     tool_list = []
+    schemas_by_name = {
+        schema["function"]["name"]: schema["function"]["parameters"]
+        for schema in tool_schemas()
+    }
 
     for tool_name, tool_info in TOOLS.items():
         tool_list.append({
             "name": tool_name,
             "description": tool_info["description"],
-            "parameters": tool_info["parameters"]
+            "parameters": tool_info["parameters"],
+            "schema": schemas_by_name.get(tool_name, {}),
         })
 
     return ToolsResponse(tools=tool_list)
@@ -773,7 +754,11 @@ def health_check():
     except Exception:
         redis_ok = False
 
+    checkpointer = get_checkpointer_status()
+
     return HealthResponse(
-        status="ok" if redis_ok else "error",
-        redis=redis_ok
+        status="ok",
+        redis=redis_ok,
+        checkpointer_backend=checkpointer.get("backend", "unknown"),
+        checkpointer_detail=checkpointer.get("detail", ""),
     )

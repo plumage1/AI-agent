@@ -1,8 +1,5 @@
-from agents.tool_executor import run_tool, show_traces
+from agents.langgraph_runtime import clear_thread_state, run_langgraph_agent_turn, show_traces
 from prompts.job_coach_prompt import SYSTEM_PROMPT
-from agents.router import route_user_input
-from cli.commands import handle_command
-from agents.chat_agent import chat_with_memory
 
 def main():
     messages = [
@@ -17,25 +14,39 @@ def main():
         myinput = input("Enter your question: ")
         command = myinput.strip().lower()
 
-        command_result = handle_command(command, messages, traces, state)
-
-        if command_result == "exit":
+        if command == "exit":
             break
 
-        if command_result == "handled":
+        if command == "clear":
+            clear_thread_state("cli")
+            messages.clear()
+            messages.append({"role": "system", "content": SYSTEM_PROMPT})
+            traces.clear()
+            print("Memory cleared.")
             continue
 
-        route = route_user_input(myinput, debug=state["debug"])
-
-        if route.get("use_tool"):
-            answer = run_tool(myinput, route, messages, traces)
-            print(answer)
+        if command == "trace":
+            show_traces(traces)
             continue
 
-        if not route.get("use_tool"):
-            answer = chat_with_memory(messages, myinput)
-            print(answer)
+        if command == "debug":
+            state["debug"] = not state["debug"]
+            print(f"Debug mode: {state['debug']}")
             continue
+
+        if command == "help":
+            print("""
+Available commands:
+- exit: quit the program
+- clear: clear conversation memory
+- trace: show tool execution traces
+- debug: toggle debug output
+- help: show this help message
+""")
+            continue
+
+        result = run_langgraph_agent_turn(myinput, messages, traces, session_id="cli")
+        print(result["answer"])
 
 
 if __name__ == "__main__":

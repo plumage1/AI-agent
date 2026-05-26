@@ -1,7 +1,11 @@
 import os
 from dataclasses import dataclass
 
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    def load_dotenv():
+        return False
 
 
 load_dotenv()
@@ -28,6 +32,11 @@ class Settings:
     max_text_length: int = int(os.getenv("MAX_TEXT_LENGTH", "20000"))
     max_top_k: int = int(os.getenv("MAX_TOP_K", "10"))
     session_ttl_seconds: int = int(os.getenv("SESSION_TTL_SECONDS", str(60 * 60 * 24)))
+    redis_host: str = os.getenv("REDIS_HOST", "localhost")
+    redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
+    redis_db: int = int(os.getenv("REDIS_DB", "0"))
+    redis_url: str | None = os.getenv("REDIS_URL")
+    langgraph_checkpointer_backend: str = os.getenv("LANGGRAPH_CHECKPOINTER_BACKEND", "auto")
 
 
 settings = Settings(

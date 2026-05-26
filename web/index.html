@@ -8,234 +8,142 @@
   </head>
   <body>
     <div class="app-shell">
-      <aside class="sidebar">
-        <div class="brand">
-          <div class="brand-mark">AI</div>
-          <div>
-            <h1>求职助手 Agent</h1>
-            <p>RAG · 面试 · 简历匹配</p>
+      <aside class="sidebar" aria-label="侧边栏">
+        <div class="sidebar-top">
+          <div class="brand-row">
+            <div class="brand-lockup">
+              <div class="brand-mark">JG</div>
+              <div>
+                <div class="brand-eyebrow">AI 求职助手</div>
+                <div class="brand-title">工作在哪里</div>
+              </div>
+            </div>
           </div>
+
+          <button id="newChat" class="side-action">＋ 新对话</button>
+          <button class="side-action" data-prompt="帮我分析这段 JD：需要 Python、Redis、Docker 和 RAG 项目经验">⌕ JD 分析</button>
+          <button class="side-action" data-prompt="帮我制定一个 RAG Agent 求职项目的学习计划">▣ 学习计划</button>
+          <button class="side-action" data-prompt="Redis 缓存雪崩是什么？面试怎么回答？">◇ RAG 问答</button>
         </div>
 
-        <nav class="nav-tabs" aria-label="功能导航">
-          <button class="nav-tab active" data-tab="workflow">Workflow</button>
-          <button class="nav-tab" data-tab="chat">Chat</button>
-          <button class="nav-tab" data-tab="rag">RAG</button>
-          <button class="nav-tab" data-tab="career">Match</button>
-          <button class="nav-tab" data-tab="interview">Interview</button>
-          <button class="nav-tab" data-tab="knowledge">Knowledge</button>
-          <button class="nav-tab" data-tab="ops">Ops</button>
-        </nav>
+        <div class="history-section">
+          <div class="section-label">最近对话</div>
+          <div id="recentList" class="history-list"></div>
+        </div>
 
-        <div class="settings-panel">
-          <label>
-            Session
+        <div class="sidebar-bottom">
+          <label class="compact-field">
+            <span>Session</span>
             <input id="sessionId" value="web_user" />
           </label>
-          <label>
-            Admin Token
-            <input id="adminToken" type="password" placeholder="可选" />
+          <label class="compact-field">
+            <span>Admin Token</span>
+            <input id="adminToken" type="password" placeholder="导入知识库时需要" />
           </label>
         </div>
       </aside>
 
-      <main class="main">
-        <header class="topbar">
-          <div>
-            <h2 id="viewTitle">Workflow</h2>
-            <p id="viewSubtitle">求职准备 Agentic Workflow</p>
+      <main class="chat-main">
+        <header class="chat-topbar">
+          <button id="openSidebar" class="icon-button sidebar-toggle" title="切换侧边栏" aria-label="切换侧边栏">☰</button>
+          <div class="title-stack">
+            <div class="chat-title-row">
+              <div class="chat-title">工作在哪里</div>
+            </div>
+            <div id="statusText" class="chat-subtitle">Function Calling · Hybrid RAG · Trace</div>
           </div>
-          <button id="healthButton" class="ghost-button">Health</button>
+          <div class="top-actions">
+            <button id="healthButton" class="ghost-button">状态</button>
+          </div>
         </header>
 
-        <section id="statusBanner" class="status-banner hidden"></section>
-
-        <section class="view" id="view-chat">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Message
-                <textarea id="chatMessage" rows="7">帮我分析这个 JD：需要 Python、Redis、Docker 和 RAG 项目经验</textarea>
-              </label>
-              <div class="action-row">
-                <button id="sendChat">Send</button>
-                <button id="clearSession" class="secondary-button">Clear</button>
-              </div>
-            </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Response</div>
-              <pre id="chatOutput" class="output"></pre>
-            </div>
-          </div>
+        <section class="insight-strip" aria-label="能力标签">
+          <span class="insight-pill">多模态文件解析</span>
+          <span class="insight-pill">知识库检索引用</span>
+          <span class="insight-pill">简历 JD 匹配</span>
+          <span class="insight-pill">求职 Workflow</span>
         </section>
 
-        <section class="view" id="view-rag">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Query
-                <textarea id="ragQuery" rows="6">Redis 缓存雪崩是什么？</textarea>
-              </label>
-              <label>
-                Top K
-                <input id="ragTopK" type="number" min="1" max="10" value="3" />
-              </label>
-              <div class="action-row">
-                <button id="searchRag">Search</button>
-                <button id="rebuildIndex" class="secondary-button">Rebuild Index</button>
-              </div>
+        <section id="toolPanel" class="tool-panel hidden">
+          <div class="tool-panel-header">
+            <div>
+              <strong>专项工具</strong>
+              <span>专项任务可以直接跑，不用跳出聊天流</span>
             </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Sources</div>
-              <pre id="ragOutput" class="output"></pre>
-            </div>
+            <button id="closeTools" class="icon-button" title="关闭" aria-label="关闭">×</button>
           </div>
+
+          <div class="tool-grid">
+            <button class="tool-card" data-tool="workflow">
+              <strong>Workflow</strong>
+              <span>简历 + JD 一键生成准备方案</span>
+            </button>
+            <button class="tool-card" data-tool="match">
+              <strong>Match</strong>
+              <span>计算匹配度和缺口关键词</span>
+            </button>
+            <button class="tool-card" data-tool="rag">
+              <strong>RAG Search</strong>
+              <span>检索知识库并返回引用</span>
+            </button>
+            <button class="tool-card" data-tool="interview">
+              <strong>Interview</strong>
+              <span>生成面试题并追问反馈</span>
+            </button>
+          </div>
+
+          <div id="toolForm" class="tool-form hidden"></div>
         </section>
 
-        <section class="view" id="view-career">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Resume
-                <textarea id="resumeText" rows="8">我熟悉 Python、FastAPI、Redis，做过 RAG Agent 项目。</textarea>
-              </label>
-              <label>
-                JD
-                <textarea id="jdText" rows="8">需要 Python、Redis、Docker 和 RAG 项目经验。</textarea>
-              </label>
-              <div class="action-row">
-                <button id="matchCareer">Text Match</button>
+        <section id="messages" class="messages" aria-live="polite">
+          <article class="message assistant">
+            <div class="avatar">AI</div>
+            <div class="message-body">
+              <p>你好，我是你的求职 Agent。可以帮你分析 JD、匹配简历、检索知识库、生成学习计划和模拟面试。</p>
+              <div class="suggestions">
+                <button data-prompt="帮我分析这段 JD：需要 Python、Redis、Docker 和 RAG 项目经验">分析 JD</button>
+                <button data-prompt="我的简历熟悉 Python、FastAPI、Redis，做过 RAG Agent 项目。帮我匹配 JD：需要 Python、Redis、Docker 和 RAG 项目经验。">匹配简历</button>
+                <button data-prompt="Redis RDB 和 AOF 有什么区别？">问知识库</button>
               </div>
-              <div class="divider"></div>
-              <label>
-                Resume File
-                <input id="resumeFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
-              </label>
-              <label>
-                JD File
-                <input id="jdFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
-              </label>
-              <button id="matchCareerFiles" class="secondary-button">File Match</button>
             </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Match Result</div>
-              <pre id="careerOutput" class="output"></pre>
-            </div>
-          </div>
+          </article>
         </section>
 
-        <section class="view active" id="view-workflow">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Resume
-                <textarea id="workflowResumeText" rows="8">我熟悉 Python、FastAPI、Redis，做过 RAG Agent 项目。</textarea>
-              </label>
-              <label>
-                JD
-                <textarea id="workflowJdText" rows="8">需要 Python、Redis、Docker 和 RAG 项目经验，能够搭建自动化工作流并调用 AI 模型接口。</textarea>
-              </label>
-              <label>
-                Top K
-                <input id="workflowTopK" type="number" min="1" max="10" value="3" />
-              </label>
-              <div class="action-row">
-                <button id="runWorkflow">Text Workflow</button>
-              </div>
-              <div class="divider"></div>
-              <label>
-                Resume File
-                <input id="workflowResumeFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
-              </label>
-              <label>
-                JD File
-                <input id="workflowJdFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
-              </label>
-              <button id="runWorkflowFiles" class="secondary-button">File Workflow</button>
-            </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Workflow Result</div>
-              <pre id="workflowOutput" class="output"></pre>
-            </div>
-          </div>
-        </section>
+        <section class="composer-wrap">
+          <div id="statusBanner" class="status-banner hidden"></div>
 
-        <section class="view" id="view-interview">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Topic
-                <input id="interviewTopic" value="RAG 项目经验" />
-              </label>
-              <label>
-                Difficulty
-                <select id="interviewDifficulty">
-                  <option>简单</option>
-                  <option selected>中等</option>
-                  <option>困难</option>
-                </select>
-              </label>
-              <button id="startInterview">Start</button>
-              <label>
-                Answer
-                <textarea id="interviewAnswer" rows="8">我会先按 Markdown 标题切分，再对长段落做固定长度切片，并设置 overlap，避免语义断裂。</textarea>
-              </label>
-              <div class="action-row">
-                <button id="submitInterview">Submit</button>
-                <button id="resetInterview" class="secondary-button">Reset</button>
-              </div>
-            </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Interview State</div>
-              <pre id="interviewOutput" class="output"></pre>
-            </div>
+          <div id="attachMenu" class="attach-menu hidden">
+            <button type="button" class="attach-option" data-attach-kind="resume">
+              <strong>上传简历</strong>
+              <span>PDF、图片或文本，直接解析技能点</span>
+            </button>
+            <button type="button" class="attach-option" data-attach-kind="jd">
+              <strong>上传 JD / 图片</strong>
+              <span>识别岗位关键词和准备重点</span>
+            </button>
+            <button type="button" class="attach-option" data-attach-kind="knowledge">
+              <strong>导入知识库</strong>
+              <span>支持 PDF、图片、TXT、Markdown</span>
+            </button>
+            <button type="button" class="attach-option" data-attach-kind="tools">
+              <strong>打开专项工具</strong>
+              <span>切到 Workflow、Match、RAG、Interview</span>
+            </button>
           </div>
-        </section>
 
-        <section class="view" id="view-knowledge">
-          <div class="workspace two-column">
-            <div class="panel">
-              <label>
-                Filename
-                <input id="knowledgeFilename" value="fastapi.md" />
-              </label>
-              <label>
-                Content
-                <textarea id="knowledgeContent" rows="12"># FastAPI 面试知识
+          <div id="dropHint" class="drop-hint hidden">松开即可把文件添加到聊天框</div>
+          <div id="pendingAttachments" class="attachment-tray hidden"></div>
 
-## FastAPI 依赖注入
-FastAPI 的 Depends 可以把公共逻辑抽取成依赖函数，用于鉴权、数据库连接、参数校验等场景。</textarea>
-              </label>
-              <div class="action-row">
-                <button id="saveKnowledge">Save</button>
-                <button id="listKnowledge" class="secondary-button">List</button>
-                <button id="listChunks" class="secondary-button">Chunks</button>
-              </div>
-            </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Knowledge</div>
-              <pre id="knowledgeOutput" class="output"></pre>
-            </div>
-          </div>
-        </section>
+          <input id="resumeUploadInput" class="sr-only" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp" />
+          <input id="jdUploadInput" class="sr-only" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp" />
+          <input id="knowledgeUploadInput" class="sr-only" type="file" accept=".pdf,.txt,.md,.png,.jpg,.jpeg,.webp" />
 
-        <section class="view" id="view-ops">
-          <div class="workspace two-column">
-            <div class="panel">
-              <div class="button-grid">
-                <button id="getTools">Tools</button>
-                <button id="getSessions">Sessions</button>
-                <button id="getTraces">Trace</button>
-                <button id="ragStatus">RAG Status</button>
-                <button id="showLastRaw">Last Raw</button>
-                <button id="runEval" class="secondary-button">Run Eval</button>
-              </div>
-            </div>
-            <div class="panel result-panel">
-              <div class="panel-title">Ops Result</div>
-              <pre id="opsOutput" class="output"></pre>
-            </div>
-          </div>
+          <form id="chatForm" class="composer">
+            <button id="attachButton" type="button" class="composer-icon" title="添加文件或工具" aria-label="添加文件或工具">＋</button>
+            <textarea id="chatMessage" rows="1" placeholder="想问什么都可以，也可以先传一份 PDF 或图片"></textarea>
+            <button id="sendChat" type="submit" class="send-button" title="发送" aria-label="发送">↑</button>
+          </form>
+          <div class="composer-hint">支持把 PDF、截图和文本资料串进求职工作流；重要材料依然建议你自己复核。</div>
         </section>
       </main>
     </div>

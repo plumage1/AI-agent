@@ -1,4 +1,8 @@
+import hashlib
+import re
 from pathlib import Path
+
+from rag.query_planner import extract_terms
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -53,15 +57,17 @@ def split_text_by_size(
     return chunks
 
 
+def make_chunk_id(source_file: str, title: str, index: int, content: str) -> str:
+    raw = f"{source_file}|{title}|{index}|{content}"
+    return hashlib.md5(raw.encode("utf-8")).hexdigest()
+
+
 def split_chunks(text: str, source_file: str) -> list[dict]:
     chunks = []
 
     for block in text.split("## "):
         block = block.strip()
-        if not block:
-            continue
-
-        if block.startswith("#"):
+        if not block or block.startswith("#"):
             continue
 
         title, _, body = block.partition("\n")
@@ -74,78 +80,68 @@ def split_chunks(text: str, source_file: str) -> list[dict]:
             if len(body) > DEFAULT_CHUNK_SIZE:
                 chunk_title = f"{title} - Part {index}"
 
+            content = f"{title}\n{chunk_text}"
             chunks.append({
                 "source_file": source_file,
                 "title": chunk_title,
-                "content": f"{title}\n{chunk_text}",
+                "content": content,
                 "chunk_index": index,
+                "chunk_id": make_chunk_id(source_file, chunk_title, index, content),
             })
 
     return chunks
 
 
 def load_chunks() -> list[dict]:
-    chunks = []
+    KNOWLEDGE_DIR.mkdir(parents=True, exist_ok=True)
 
+    chunks = []
     for path in sorted(KNOWLEDGE_DIR.glob("*.md")):
         text = path.read_text(encoding="utf-8-sig")
         chunks.extend(split_chunks(text, source_file=path.name))
-
     return chunks
 
 
-def extract_keywords(query: str) -> list[str]:
-    keywords = []
+def keyword_score(term: str, title: str, content: str) -> int:
+    term_lower = term.lower()
+    title_lower = title.lower()
+    content_lower = content.lower()
+    score = 0
 
-    known_keywords = [
-        "Redis",
-        "缓存雪崩",
-        "缓存穿透",
-        "持久化",
-        "RDB",
-        "AOF",
-        "RAG",
-        "检索增强生成",
-        "微调",
-        "知识库",
-    ]
+    if term_lower in title_lower:
+        score += 5
+    if term_lower in content_lower:
+        score += 2
 
-    for keyword in known_keywords:
-        if keyword.lower() in query.lower():
-            keywords.append(keyword)
+    if re.fullmatch(r"[\u4e00-\u9fff]{2,}", term):
+        for index in range(len(term) - 1):
+            bigram = term[index:index + 2]
+            if bigram in title:
+                score += 2
+            if bigram in content:
+                score += 1
 
-    return keywords
-
-
-def keyword_score(keyword: str) -> int:
-    generic_keywords = {"Redis", "RAG", "知识库"}
-
-    if keyword in generic_keywords:
-        return 1
-
-    return 10
+    return score
 
 
-def retrieve(query: str, top_k: int = 2, min_score: int = 10) -> list[dict]:
+def retrieve(query: str, top_k: int = 2, min_score: int = 1) -> list[dict]:
     chunks = load_chunks()
-    keywords = extract_keywords(query)
+    terms = extract_terms(query)
 
-    if not keywords:
-        keywords = query.split()
+    if not terms:
+        terms = query.split()
 
     scored_chunks = []
 
     for chunk in chunks:
         score = 0
-        content = chunk["content"]
-
-        for keyword in keywords:
-            if keyword.lower() in content.lower():
-                score += keyword_score(keyword)
+        for term in terms:
+            score += keyword_score(term, chunk["title"], chunk["content"])
 
         source = {
             **chunk,
             "score": score,
+            "retriever": "keyword",
         }
         scored_chunks.append(source)
 

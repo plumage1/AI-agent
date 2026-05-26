@@ -1,5 +1,4 @@
-import numpy as np
-from sentence_transformers import SentenceTransformer
+import math
 
 from rag.simple_retriever import load_chunks
 
@@ -15,18 +14,31 @@ def get_model():
     global _model
 
     if _model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+        except ImportError as e:
+            raise RuntimeError(
+                "sentence-transformers is required to use embedding retrieval"
+            ) from e
+
         _model = SentenceTransformer(MODEL_NAME)
 
     return _model
 
 
 def cosine_similarity(a, b) -> float:
-    denominator = np.linalg.norm(a) * np.linalg.norm(b)
+    if len(a) != len(b):
+        return 0.0
+
+    dot_product = sum(left * right for left, right in zip(a, b))
+    norm_a = math.sqrt(sum(value * value for value in a))
+    norm_b = math.sqrt(sum(value * value for value in b))
+    denominator = norm_a * norm_b
 
     if denominator == 0:
         return 0.0
 
-    return float(np.dot(a, b) / denominator)
+    return float(dot_product / denominator)
 
 
 def build_embeddings():

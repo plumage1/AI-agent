@@ -21,23 +21,39 @@ def run_rag_eval(top_k: int = 3) -> dict:
     for case in cases:
         sources, retriever = retrieve_sources(case["query"], top_k=top_k)
         returned_titles = [source["title"] for source in sources]
-        passed = case["expected_title"] in returned_titles
+        expected_title = case["expected_title"]
+        passed = expected_title in returned_titles
+        rank = returned_titles.index(expected_title) + 1 if passed else None
 
         results.append({
             "query": case["query"],
-            "expected_title": case["expected_title"],
+            "expected_title": expected_title,
             "returned_titles": returned_titles,
             "passed": passed,
+            "rank": rank,
+            "reciprocal_rank": round(1 / rank, 4) if rank else 0,
+            "citations": [
+                {
+                    "id": source.get("citation_id"),
+                    "title": source.get("title"),
+                    "score": source.get("rerank_score", source.get("score")),
+                    "retrievers": source.get("retrievers", [source.get("retriever")]),
+                }
+                for source in sources
+            ],
             "retriever": retriever,
         })
 
     passed_count = sum(1 for result in results if result["passed"])
+    reciprocal_rank_sum = sum(result["reciprocal_rank"] for result in results)
 
     return {
         "name": "rag_retrieval_eval",
         "total": len(results),
         "passed": passed_count,
         "failed": len(results) - passed_count,
+        "recall_at_k": round(passed_count / len(results), 4) if results else 0,
+        "mrr": round(reciprocal_rank_sum / len(results), 4) if results else 0,
         "accuracy": round(passed_count / len(results), 4) if results else 0,
         "results": results,
     }

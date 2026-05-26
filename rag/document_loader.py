@@ -1,14 +1,16 @@
 import base64
+import os
 from io import BytesIO
 from pathlib import Path
 
-from core.llm import client, model
+from core.llm import get_client, model
 
 
 TEXT_EXTENSIONS = {".md", ".txt"}
 PDF_EXTENSIONS = {".pdf"}
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 SUPPORTED_EXTENSIONS = TEXT_EXTENSIONS | PDF_EXTENSIONS | IMAGE_EXTENSIONS
+TESSERACT_CMD = os.getenv("TESSERACT_CMD", "").strip()
 
 
 def make_knowledge_filename(source_filename: str) -> str:
@@ -59,7 +61,7 @@ def extract_pdf_text(file_bytes: bytes) -> str:
 def extract_image_text_with_llm(file_bytes: bytes, mime_type: str) -> str:
     image_base64 = base64.b64encode(file_bytes).decode("utf-8")
 
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model=model,
         messages=[
             {
@@ -97,8 +99,37 @@ def extract_image_text_with_local_ocr(file_bytes: bytes) -> str:
             "本地图片 OCR 需要安装 Pillow 和 pytesseract。"
         ) from e
 
+    if TESSERACT_CMD:
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_CMD
+
     image = Image.open(BytesIO(file_bytes))
-    return pytesseract.image_to_string(image, lang="chi_sim+eng")
+    try:
+        text = pytesseract.image_to_string(image, lang="chi_sim+eng")
+    except pytesseract.TesseractNotFoundError as e:
+        raise RuntimeError(
+            "未找到 Tesseract OCR。请安装 Tesseract，"
+            "并确保它已加入 PATH，或在 .env 中配置 TESSERACT_CMD。"
+        ) from e
+
+    return text.strip()
+
+
+def build_image_extract_error(local_error: Exception | None, llm_error: Exception | None) -> RuntimeError:
+    parts = ["图片识别失败。"]
+
+    if local_error is not None:
+        parts.append(f"本地 OCR：{local_error}")
+    else:
+        parts.append("本地 OCR：未返回可用文字。")
+
+    if llm_error is not None:
+        parts.append("远程视觉：当前不可用或响应超时。")
+    else:
+        parts.append("远程视觉：未返回可用文字。")
+
+    parts.append("建议先安装并配置 Tesseract OCR；如果仍想走远程识别，再确认当前模型支持图片输入。")
+
+    return RuntimeError(" ".join(parts))
 
 
 def extract_image_text(file_bytes: bytes, suffix: str) -> str:
@@ -109,18 +140,24 @@ def extract_image_text(file_bytes: bytes, suffix: str) -> str:
         ".webp": "image/webp",
     }.get(suffix, "image/png")
 
+    local_error = None
+    llm_error = None
+
     try:
-        return extract_image_text_with_llm(file_bytes, mime_type=mime_type)
-    except Exception as llm_error:
-        try:
-            return extract_image_text_with_local_ocr(file_bytes)
-        except Exception as local_error:
-            raise RuntimeError(
-                "图片识别失败：大模型视觉识别不可用，本地 OCR 也未配置。"
-                "如果要识别 PNG/JPG，请确认当前模型支持图片输入，"
-                "或安装 Tesseract OCR、Pillow、pytesseract。"
-                f" Vision error: {llm_error}; Local OCR error: {local_error}"
-            ) from local_error
+        local_text = extract_image_text_with_local_ocr(file_bytes)
+        if local_text:
+            return local_text
+    except Exception as e:
+        local_error = e
+
+    try:
+        llm_text = (extract_image_text_with_llm(file_bytes, mime_type=mime_type) or "").strip()
+        if llm_text:
+            return llm_text
+    except Exception as e:
+        llm_error = e
+
+    raise build_image_extract_error(local_error, llm_error) from (local_error or llm_error)
 
 
 def build_knowledge_markdown(title: str, text: str) -> str:

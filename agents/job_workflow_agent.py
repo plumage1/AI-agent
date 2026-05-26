@@ -1,5 +1,26 @@
+from functools import lru_cache
+from typing import Any
+
 from agents.career_agent import analyze_jd_text, analyze_resume_text, match_resume_to_jd
 from rag.rag_chain import format_citations, retrieve_sources
+from typing_extensions import TypedDict
+
+
+class WorkflowState(TypedDict, total=False):
+    resume_text: str
+    jd_text: str
+    top_k: int
+    jd_analysis: dict[str, Any]
+    resume_analysis: dict[str, Any]
+    match: dict[str, Any]
+    focus_topics: list[str]
+    rag_query: str
+    rag: dict[str, Any]
+    learning_tasks: list[dict[str, Any]]
+    interview_questions: list[str]
+    resume_project_bullets: list[str]
+    next_actions: list[str]
+    result: dict[str, Any]
 
 
 def run_job_workflow(
@@ -7,35 +28,62 @@ def run_job_workflow(
     jd_text: str,
     top_k: int = 3,
 ) -> dict:
-    jd_analysis = analyze_jd_text(jd_text)
-    resume_analysis = analyze_resume_text(resume_text)
-    match_result = match_resume_to_jd(resume_text, jd_text)
+    graph = get_workflow_graph()
+    state: WorkflowState = {
+        "resume_text": resume_text,
+        "jd_text": jd_text,
+        "top_k": top_k,
+    }
+    result = graph.invoke(state)
+    return result["result"]
 
+
+def analyze_inputs_node(state: WorkflowState) -> dict:
+    jd_analysis = analyze_jd_text(state["jd_text"])
+    resume_analysis = analyze_resume_text(state["resume_text"])
+    return {
+        "jd_analysis": jd_analysis,
+        "resume_analysis": resume_analysis,
+    }
+
+
+def match_resume_node(state: WorkflowState) -> dict:
+    match_result = match_resume_to_jd(state["resume_text"], state["jd_text"])
     focus_topics = select_focus_topics(
         jd_keywords=match_result["jd_keywords"],
         missing_keywords=match_result["missing_keywords"],
     )
-    rag_query = build_rag_query(focus_topics)
-    rag_result = safe_retrieve_sources(query=rag_query, top_k=top_k)
-
     return {
-        "goal": "根据岗位 JD 和候选人简历，自动生成求职准备方案。",
-        "workflow_steps": build_workflow_steps(),
-        "jd_analysis": jd_analysis,
-        "resume_analysis": resume_analysis,
         "match": match_result,
+        "focus_topics": focus_topics,
+        "rag_query": build_rag_query(focus_topics),
+    }
+
+
+def retrieve_rag_node(state: WorkflowState) -> dict:
+    rag_result = safe_retrieve_sources(
+        query=state["rag_query"],
+        top_k=state.get("top_k", 3),
+    )
+    return {
         "rag": {
-            "query": rag_query,
+            "query": state["rag_query"],
             **rag_result,
-        },
+        }
+    }
+
+
+def build_artifacts_node(state: WorkflowState) -> dict:
+    match_result = state["match"]
+    return {
         "learning_tasks": build_learning_tasks(
             matched_keywords=match_result["matched_keywords"],
             missing_keywords=match_result["missing_keywords"],
-            focus_topics=focus_topics,
+            focus_topics=state["focus_topics"],
         ),
         "interview_questions": build_interview_questions(
-            resume_text=resume_text,
-            jd_text=jd_text,
+            resume_text=state["resume_text"],
+            jd_text=state["jd_text"],
             jd_keywords=match_result["jd_keywords"],
             matched_keywords=match_result["matched_keywords"],
             missing_keywords=match_result["missing_keywords"],
@@ -43,6 +91,41 @@ def run_job_workflow(
         "resume_project_bullets": build_resume_project_bullets(match_result),
         "next_actions": build_next_actions(match_result),
     }
+
+
+def finalize_workflow_node(state: WorkflowState) -> dict:
+    result = {
+        "goal": "根据岗位 JD 和候选人简历，自动生成求职准备方案。",
+        "workflow_steps": build_workflow_steps(),
+        "jd_analysis": state["jd_analysis"],
+        "resume_analysis": state["resume_analysis"],
+        "match": state["match"],
+        "rag": state["rag"],
+        "learning_tasks": state["learning_tasks"],
+        "interview_questions": state["interview_questions"],
+        "resume_project_bullets": state["resume_project_bullets"],
+        "next_actions": state["next_actions"],
+    }
+    return {"result": result}
+
+
+@lru_cache(maxsize=1)
+def get_workflow_graph():
+    from langgraph.graph import END, START, StateGraph
+
+    graph = StateGraph(WorkflowState)
+    graph.add_node("analyze_inputs", analyze_inputs_node)
+    graph.add_node("match_resume", match_resume_node)
+    graph.add_node("retrieve_rag", retrieve_rag_node)
+    graph.add_node("build_artifacts", build_artifacts_node)
+    graph.add_node("finalize", finalize_workflow_node)
+    graph.add_edge(START, "analyze_inputs")
+    graph.add_edge("analyze_inputs", "match_resume")
+    graph.add_edge("match_resume", "retrieve_rag")
+    graph.add_edge("retrieve_rag", "build_artifacts")
+    graph.add_edge("build_artifacts", "finalize")
+    graph.add_edge("finalize", END)
+    return graph.compile()
 
 
 def safe_retrieve_sources(query: str, top_k: int) -> dict:
