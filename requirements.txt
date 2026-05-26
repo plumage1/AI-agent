@@ -1,0 +1,13 @@
+openai
+python-dotenv
+fastapi
+uvicorn
+pydantic
+redis
+sentence-transformers
+numpy
+pypdf
+python-multipart
+chromadb
+pillow
+pytesseract

@@ -1,0 +1,36 @@
+services:
+  api:
+    build: .
+    container_name: myagent-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_DB: 0
+      RAG_RETRIEVER: chroma
+      APP_ENV: production
+      MAX_UPLOAD_BYTES: 5242880
+      MAX_TEXT_LENGTH: 20000
+      MAX_TOP_K: 10
+    volumes:
+      - ./data/knowledge:/app/data/knowledge
+      - ./data/chroma:/app/data/chroma
+    depends_on:
+      - redis
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: myagent-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

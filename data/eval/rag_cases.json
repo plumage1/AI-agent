@@ -1,0 +1,18 @@
+[
+  {
+    "query": "Redis 缓存雪崩是什么？",
+    "expected_title": "Redis 缓存雪崩"
+  },
+  {
+    "query": "Redis 缓存穿透怎么解决？",
+    "expected_title": "Redis 缓存穿透"
+  },
+  {
+    "query": "Redis RDB 和 AOF 有什么区别？",
+    "expected_title": "Redis 持久化"
+  },
+  {
+    "query": "RAG 为什么比直接问大模型更适合企业知识库？",
+    "expected_title": "RAG"
+  }
+]

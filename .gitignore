@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+.venv/
+.idea/
+__pycache__/
+*.pyc
+*.log
+.pytest_cache/
+data/chroma/
+data/uploads/

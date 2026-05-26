@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 求职助手 Agent</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">AI</div>
+          <div>
+            <h1>求职助手 Agent</h1>
+            <p>RAG · 面试 · 简历匹配</p>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="功能导航">
+          <button class="nav-tab active" data-tab="workflow">Workflow</button>
+          <button class="nav-tab" data-tab="chat">Chat</button>
+          <button class="nav-tab" data-tab="rag">RAG</button>
+          <button class="nav-tab" data-tab="career">Match</button>
+          <button class="nav-tab" data-tab="interview">Interview</button>
+          <button class="nav-tab" data-tab="knowledge">Knowledge</button>
+          <button class="nav-tab" data-tab="ops">Ops</button>
+        </nav>
+
+        <div class="settings-panel">
+          <label>
+            Session
+            <input id="sessionId" value="web_user" />
+          </label>
+          <label>
+            Admin Token
+            <input id="adminToken" type="password" placeholder="可选" />
+          </label>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h2 id="viewTitle">Workflow</h2>
+            <p id="viewSubtitle">求职准备 Agentic Workflow</p>
+          </div>
+          <button id="healthButton" class="ghost-button">Health</button>
+        </header>
+
+        <section id="statusBanner" class="status-banner hidden"></section>
+
+        <section class="view" id="view-chat">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Message
+                <textarea id="chatMessage" rows="7">帮我分析这个 JD：需要 Python、Redis、Docker 和 RAG 项目经验</textarea>
+              </label>
+              <div class="action-row">
+                <button id="sendChat">Send</button>
+                <button id="clearSession" class="secondary-button">Clear</button>
+              </div>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Response</div>
+              <pre id="chatOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-rag">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Query
+                <textarea id="ragQuery" rows="6">Redis 缓存雪崩是什么？</textarea>
+              </label>
+              <label>
+                Top K
+                <input id="ragTopK" type="number" min="1" max="10" value="3" />
+              </label>
+              <div class="action-row">
+                <button id="searchRag">Search</button>
+                <button id="rebuildIndex" class="secondary-button">Rebuild Index</button>
+              </div>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Sources</div>
+              <pre id="ragOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-career">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Resume
+                <textarea id="resumeText" rows="8">我熟悉 Python、FastAPI、Redis，做过 RAG Agent 项目。</textarea>
+              </label>
+              <label>
+                JD
+                <textarea id="jdText" rows="8">需要 Python、Redis、Docker 和 RAG 项目经验。</textarea>
+              </label>
+              <div class="action-row">
+                <button id="matchCareer">Text Match</button>
+              </div>
+              <div class="divider"></div>
+              <label>
+                Resume File
+                <input id="resumeFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
+              </label>
+              <label>
+                JD File
+                <input id="jdFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
+              </label>
+              <button id="matchCareerFiles" class="secondary-button">File Match</button>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Match Result</div>
+              <pre id="careerOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view active" id="view-workflow">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Resume
+                <textarea id="workflowResumeText" rows="8">我熟悉 Python、FastAPI、Redis，做过 RAG Agent 项目。</textarea>
+              </label>
+              <label>
+                JD
+                <textarea id="workflowJdText" rows="8">需要 Python、Redis、Docker 和 RAG 项目经验，能够搭建自动化工作流并调用 AI 模型接口。</textarea>
+              </label>
+              <label>
+                Top K
+                <input id="workflowTopK" type="number" min="1" max="10" value="3" />
+              </label>
+              <div class="action-row">
+                <button id="runWorkflow">Text Workflow</button>
+              </div>
+              <div class="divider"></div>
+              <label>
+                Resume File
+                <input id="workflowResumeFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
+              </label>
+              <label>
+                JD File
+                <input id="workflowJdFile" type="file" accept=".md,.txt,.pdf,.png,.jpg,.jpeg,.webp" />
+              </label>
+              <button id="runWorkflowFiles" class="secondary-button">File Workflow</button>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Workflow Result</div>
+              <pre id="workflowOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-interview">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Topic
+                <input id="interviewTopic" value="RAG 项目经验" />
+              </label>
+              <label>
+                Difficulty
+                <select id="interviewDifficulty">
+                  <option>简单</option>
+                  <option selected>中等</option>
+                  <option>困难</option>
+                </select>
+              </label>
+              <button id="startInterview">Start</button>
+              <label>
+                Answer
+                <textarea id="interviewAnswer" rows="8">我会先按 Markdown 标题切分，再对长段落做固定长度切片，并设置 overlap，避免语义断裂。</textarea>
+              </label>
+              <div class="action-row">
+                <button id="submitInterview">Submit</button>
+                <button id="resetInterview" class="secondary-button">Reset</button>
+              </div>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Interview State</div>
+              <pre id="interviewOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-knowledge">
+          <div class="workspace two-column">
+            <div class="panel">
+              <label>
+                Filename
+                <input id="knowledgeFilename" value="fastapi.md" />
+              </label>
+              <label>
+                Content
+                <textarea id="knowledgeContent" rows="12"># FastAPI 面试知识
+
+## FastAPI 依赖注入
+FastAPI 的 Depends 可以把公共逻辑抽取成依赖函数，用于鉴权、数据库连接、参数校验等场景。</textarea>
+              </label>
+              <div class="action-row">
+                <button id="saveKnowledge">Save</button>
+                <button id="listKnowledge" class="secondary-button">List</button>
+                <button id="listChunks" class="secondary-button">Chunks</button>
+              </div>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Knowledge</div>
+              <pre id="knowledgeOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-ops">
+          <div class="workspace two-column">
+            <div class="panel">
+              <div class="button-grid">
+                <button id="getTools">Tools</button>
+                <button id="getSessions">Sessions</button>
+                <button id="getTraces">Trace</button>
+                <button id="ragStatus">RAG Status</button>
+                <button id="showLastRaw">Last Raw</button>
+                <button id="runEval" class="secondary-button">Run Eval</button>
+              </div>
+            </div>
+            <div class="panel result-panel">
+              <div class="panel-title">Ops Result</div>
+              <pre id="opsOutput" class="output"></pre>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/ui/app.js"></script>
+  </body>
+</html>
