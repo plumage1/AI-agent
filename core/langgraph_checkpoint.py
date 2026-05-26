@@ -1,5 +1,6 @@
 import logging
 from functools import lru_cache
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 from core.config import settings
 
@@ -10,16 +11,29 @@ _CHECKPOINTER_STATUS = {
 }
 
 
+def apply_redis_timeouts(redis_url: str) -> str:
+    parsed = urlparse(redis_url)
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query.setdefault("socket_connect_timeout", str(settings.redis_socket_connect_timeout))
+    query.setdefault("socket_timeout", str(settings.redis_socket_timeout))
+    return urlunparse(parsed._replace(query=urlencode(query)))
+
+
 def build_redis_url() -> str:
     if settings.redis_url:
-        return settings.redis_url
-    return f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+        return apply_redis_timeouts(settings.redis_url)
+    return apply_redis_timeouts(
+        f"redis://{settings.redis_host}:{settings.redis_port}/{settings.redis_db}"
+    )
 
 
 @lru_cache(maxsize=1)
 def get_checkpointer():
     global _CHECKPOINTER_STATUS
     backend = (settings.langgraph_checkpointer_backend or "auto").strip().lower()
+
+    if not settings.redis_enabled and backend in {"auto", "redis"}:
+        backend = "memory" if backend == "auto" else backend
 
     if backend == "memory":
         from langgraph.checkpoint.memory import MemorySaver

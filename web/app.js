@@ -3,9 +3,11 @@ const state = {
   busy: false,
   recentConversations: [],
   pendingAttachments: [],
+  agentSnapshot: null,
 };
 
 const RECENT_STORAGE_KEY = "recentConversations";
+const DEFAULT_STATUS_TEXT = "Function Calling · Hybrid RAG · Trace";
 
 function $(id) {
   return document.getElementById(id);
@@ -57,7 +59,9 @@ function clearStatus() {
   const banner = $("statusBanner");
   banner.textContent = "";
   banner.className = "status-banner hidden";
-  $("statusText").textContent = "Function Calling · Hybrid RAG · Trace";
+  $("statusText").textContent = state.agentSnapshot?.agent_mode
+    ? `Agent · ${state.agentSnapshot.agent_status || "running"}`
+    : DEFAULT_STATUS_TEXT;
 }
 
 function pretty(data) {
@@ -126,6 +130,80 @@ function renderWelcomeMessage() {
       <button data-prompt="Redis RDB 和 AOF 有什么区别？">问知识库</button>
     </div>
   `;
+}
+
+function renderAgentSteps(steps, currentStep, mode = "plan") {
+  const values = Array.isArray(steps) ? steps : [];
+  if (!values.length) {
+    return `<div class="agent-list-empty">暂无 ${mode === "plan" ? "计划" : "进度"}。</div>`;
+  }
+
+  return values.map((step, index) => {
+    const currentId = currentStep?.step_id;
+    const isCurrent = Boolean(currentId && step.step_id === currentId);
+    const title = step.title || step.step_type || `Step ${index + 1}`;
+    const status = step.status || step.review_decision || "pending";
+    const meta = mode === "plan"
+      ? (step.input_summary || step.tool_name || "")
+      : (step.result_summary || step.next_action || step.error || "");
+
+    return `
+      <div class="agent-step${isCurrent ? " current" : ""}">
+        <div class="agent-step-header">
+          <span>${index + 1}. ${escapeHtml(title)}</span>
+          <span class="agent-step-status">${escapeHtml(status)}</span>
+        </div>
+        <div class="agent-step-meta">${escapeHtml(meta || "等待执行")}</div>
+      </div>
+    `;
+  }).join("");
+}
+
+function resetAgentPanel() {
+  state.agentSnapshot = null;
+  $("agentPanel").classList.add("hidden");
+  $("agentGoal").textContent = "";
+  $("agentPlan").innerHTML = "";
+  $("agentProgress").innerHTML = "";
+  $("agentNextAction").textContent = "";
+  $("agentFinalSummary").textContent = "";
+  $("agentStatusBadge").textContent = "idle";
+  $("agentGoalTitle").textContent = "Goal";
+  if ($("statusBanner").classList.contains("hidden")) {
+    $("statusText").textContent = DEFAULT_STATUS_TEXT;
+  }
+}
+
+function updateAgentPanel(agentData) {
+  if (!agentData?.agent_mode) {
+    resetAgentPanel();
+    return;
+  }
+
+  state.agentSnapshot = agentData;
+  $("agentPanel").classList.remove("hidden");
+  $("agentGoalTitle").textContent = agentData.task_type || "Goal";
+  $("agentStatusBadge").textContent = agentData.agent_status || "running";
+  $("agentGoal").textContent = agentData.goal || "正在处理当前求职任务。";
+  $("agentPlan").innerHTML = renderAgentSteps(agentData.plan || [], agentData.current_step, "plan");
+  $("agentProgress").innerHTML = renderAgentSteps(agentData.step_history || [], agentData.current_step, "progress");
+  $("agentNextAction").textContent = agentData.next_action || "等待下一步执行。";
+  $("agentFinalSummary").textContent = agentData.final_summary || "当前由 Agent 逐步推进。";
+
+  if ($("statusBanner").classList.contains("hidden")) {
+    $("statusText").textContent = `Agent · ${agentData.agent_status || "running"}`;
+  }
+}
+
+async function loadAgentState(sessionId = getSessionId()) {
+  try {
+    const data = await api(`/agent/state?session_id=${encodeURIComponent(sessionId)}`, {
+      headers: getHeaders(false),
+    });
+    updateAgentPanel(data);
+  } catch (_error) {
+    resetAgentPanel();
+  }
 }
 
 function formatFileSize(size) {
@@ -226,6 +304,7 @@ function renderRecentConversations(activeSessionId = "") {
       $("messages").innerHTML = item.html || "";
       bindPromptButtons($("messages"));
       renderRecentConversations(item.sessionId);
+      loadAgentState(item.sessionId);
       scrollToBottom();
     });
     list.appendChild(button);
@@ -526,6 +605,7 @@ async function submitChat(message) {
       },
       citations: data.citations || [],
     });
+    updateAgentPanel(data);
     showStatus(data.used_tool ? "已调用工具" : "已回复");
   } catch (error) {
     replaceMessage(loading, error.message);
@@ -795,6 +875,7 @@ function bindSidebar() {
     closeAttachMenu();
     toggleTools(false);
     resetConversationView();
+    resetAgentPanel();
   });
 
   document.querySelector(".sidebar").addEventListener("click", (event) => {
@@ -936,6 +1017,7 @@ function bindSettings() {
 
   $("sessionId").addEventListener("input", () => {
     localStorage.setItem("sessionId", getSessionId());
+    loadAgentState(getSessionId());
   });
 }
 
@@ -979,6 +1061,7 @@ function boot() {
   resizeComposer();
   renderRecentConversations(getSessionId());
   resetConversationView();
+  loadAgentState(getSessionId());
 }
 
 boot();

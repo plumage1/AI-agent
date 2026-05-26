@@ -1,4 +1,10 @@
 from agents.career_agent import match_resume_to_jd
+from tools.agent_tools import (
+    build_structured_learning_plan,
+    job_search_strategy,
+    prepare_interview_focus,
+    synthesize_resume_bullets,
+)
 from tools.jd_tools import analyze_jd
 from tools.learning_tools import get_learning_plan
 from tools.rag_tools import rag_search
@@ -98,6 +104,89 @@ TOOLS = {
                 }
             },
             "required": ["query"],
+            "additionalProperties": False,
+        },
+    },
+    "synthesize_resume_bullets": {
+        "function": synthesize_resume_bullets,
+        "description": "Generate resume project bullets, keyword reinforcements, and risky wording based on resume and JD analysis.",
+        "parameters": {
+            "resume_analysis": "Structured resume analysis result.",
+            "jd_analysis": "Structured JD analysis result.",
+            "match_result": "Structured resume-JD match result.",
+        },
+        "schema": {
+            "type": "object",
+            "properties": {
+                "resume_analysis": {"type": "object"},
+                "jd_analysis": {"type": "object"},
+                "match_result": {"type": "object"},
+            },
+            "required": ["resume_analysis", "jd_analysis", "match_result"],
+            "additionalProperties": False,
+        },
+    },
+    "prepare_interview_focus": {
+        "function": prepare_interview_focus,
+        "description": "Generate interview focus topics, follow-up questions, and answer angles.",
+        "parameters": {
+            "jd_analysis": "Structured JD analysis result.",
+            "match_result": "Structured resume-JD match result.",
+            "rag_result": "Optional RAG retrieval evidence.",
+        },
+        "schema": {
+            "type": "object",
+            "properties": {
+                "jd_analysis": {"type": "object"},
+                "match_result": {"type": "object"},
+                "rag_result": {"type": "object"},
+            },
+            "required": ["jd_analysis", "match_result"],
+            "additionalProperties": False,
+        },
+    },
+    "job_search_strategy": {
+        "function": job_search_strategy,
+        "description": "Generate a seven-day job search strategy using candidate profile and current gaps.",
+        "parameters": {
+            "candidate_profile": "Structured candidate profile summary.",
+            "job_target": "Structured target role summary.",
+            "current_gap": "List of current gaps.",
+        },
+        "schema": {
+            "type": "object",
+            "properties": {
+                "candidate_profile": {"type": "object"},
+                "job_target": {"type": "object"},
+                "current_gap": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": [],
+            "additionalProperties": False,
+        },
+    },
+    "generate_learning_plan": {
+        "function": build_structured_learning_plan,
+        "description": "Generate a structured learning plan for a technical topic.",
+        "parameters": {
+            "topic": "Technical topic such as RAG, FastAPI, or Redis.",
+            "current_gap": "Optional list of current gaps.",
+        },
+        "schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": "Technical topic such as RAG, FastAPI, or Redis.",
+                },
+                "current_gap": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": ["topic"],
             "additionalProperties": False,
         },
     },

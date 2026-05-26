@@ -23,7 +23,6 @@ from agents.interview_agent import (
     summarize_interview,
 )
 from agents.job_workflow_agent import run_job_workflow
-from evals.eval_runner import run_all_evals, run_career_eval, run_rag_eval
 from core.config import settings
 from core.langgraph_checkpoint import get_checkpointer_status
 from core.redis_client import redis_client
@@ -112,6 +111,15 @@ class ChatResponse(BaseModel):
     trace_id: int | None = None
     sources: list = Field(default_factory=list)
     citations: list = Field(default_factory=list)
+    agent_mode: bool = False
+    goal: str = ""
+    task_type: str = ""
+    plan: list = Field(default_factory=list)
+    current_step: dict | None = None
+    step_history: list = Field(default_factory=list)
+    agent_status: str = "idle"
+    next_action: str = ""
+    final_summary: str = ""
 
 class TraceResponse(BaseModel):
     traces: list
@@ -134,6 +142,20 @@ class SessionDetailResponse(BaseModel):
     turn_count: int
     trace_count: int
     ttl_seconds: int
+
+class AgentStateResponse(BaseModel):
+    session_id: str
+    agent_mode: bool = False
+    goal: str = ""
+    task_type: str = ""
+    plan: list = Field(default_factory=list)
+    current_step: dict | None = None
+    step_history: list = Field(default_factory=list)
+    agent_status: str = "idle"
+    next_action: str = ""
+    final_summary: str = ""
+    artifacts: dict = Field(default_factory=dict)
+    memory: dict = Field(default_factory=dict)
 
 class HealthResponse(BaseModel):
     status: str
@@ -255,9 +277,6 @@ class JobWorkflowRequest(BaseModel):
 class JobWorkflowResponse(BaseModel):
     result: dict
 
-class EvalResponse(BaseModel):
-    result: dict
-
 @app.middleware("http")
 async def log_requests(request, call_next):
     start_time = time.time()
@@ -283,6 +302,18 @@ def require_session(session_id: str) -> dict:
 
     return get_session(session_id)
 
+
+def get_current_agent_step(agent: dict) -> dict | None:
+    plan = agent.get("plan", []) or []
+    if not plan:
+        return None
+
+    for step in plan:
+        if step.get("status") in {"pending", "running"}:
+            return step
+
+    return plan[-1]
+
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     validate_text_length(request.message, "message")
@@ -296,6 +327,7 @@ def chat(request: ChatRequest):
             request.message,
             messages,
             traces,
+            session_data=session,
             session_id=request.session_id,
         )
     except RuntimeError as e:
@@ -307,6 +339,8 @@ def chat(request: ChatRequest):
             detail=f"Chat request failed: {e}",
         )
 
+    session["memory"] = result.get("memory", session.get("memory", {}))
+    session["agent"] = result.get("agent", session.get("agent", {}))
     save_session(request.session_id, session)
 
     return ChatResponse(
@@ -316,6 +350,35 @@ def chat(request: ChatRequest):
         trace_id=result["trace_id"],
         sources=result["sources"],
         citations=result["citations"],
+        agent_mode=result.get("agent", {}).get("agent_mode", False),
+        goal=result.get("agent", {}).get("goal", ""),
+        task_type=result.get("agent", {}).get("task_type", ""),
+        plan=result.get("agent", {}).get("plan", []),
+        current_step=result.get("agent", {}).get("current_step"),
+        step_history=result.get("agent", {}).get("step_history", []),
+        agent_status=result.get("agent", {}).get("agent_status", "idle"),
+        next_action=result.get("agent", {}).get("next_action", ""),
+        final_summary=result.get("agent", {}).get("final_summary", ""),
+    )
+
+
+@app.get("/agent/state", response_model=AgentStateResponse)
+def get_agent_state_api(session_id: str = "default", _admin: bool = Depends(require_admin)):
+    session = require_session(session_id)
+    agent = session.get("agent", {})
+    return AgentStateResponse(
+        session_id=session_id,
+        agent_mode=agent.get("agent_mode", False),
+        goal=agent.get("goal", ""),
+        task_type=agent.get("task_type", ""),
+        plan=agent.get("plan", []),
+        current_step=agent.get("current_step") or get_current_agent_step(agent),
+        step_history=agent.get("step_history", []),
+        agent_status=agent.get("agent_status", "idle"),
+        next_action=agent.get("next_action", ""),
+        final_summary=agent.get("final_summary", ""),
+        artifacts=agent.get("artifacts", {}),
+        memory=session.get("memory", {}),
     )
 @app.get("/trace", response_model=TraceResponse)
 def get_trace(session_id: str = "default", _admin: bool = Depends(require_admin)):
@@ -708,18 +771,6 @@ async def match_resume_jd_files_api(
         raise HTTPException(status_code=500, detail=str(e))
 
     return ResumeJdMatchResponse(**result)
-
-@app.get("/eval/rag", response_model=EvalResponse)
-def run_rag_eval_api(_admin: bool = Depends(require_admin)):
-    return EvalResponse(result=run_rag_eval())
-
-@app.get("/eval/career", response_model=EvalResponse)
-def run_career_eval_api(_admin: bool = Depends(require_admin)):
-    return EvalResponse(result=run_career_eval())
-
-@app.get("/eval/all", response_model=EvalResponse)
-def run_all_evals_api(_admin: bool = Depends(require_admin)):
-    return EvalResponse(result=run_all_evals())
 
 @app.get("/sessions", response_model=SessionsResponse)
 def list_sessions_api(_admin: bool = Depends(require_admin)):

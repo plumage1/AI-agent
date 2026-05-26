@@ -22,7 +22,7 @@ client = None
 
 codex_cli_path = os.getenv("CODEX_CLI_PATH", "codex.cmd").strip() or "codex.cmd"
 codex_model = os.getenv("CODEX_MODEL", "").strip()
-codex_timeout_seconds = int(os.getenv("CODEX_TIMEOUT_SECONDS", "120"))
+codex_timeout_seconds = int(os.getenv("CODEX_TIMEOUT_SECONDS", "180"))
 
 
 def get_provider() -> str:

@@ -64,6 +64,37 @@
           <span class="insight-pill">求职 Workflow</span>
         </section>
 
+        <section id="agentPanel" class="agent-panel hidden" aria-label="Agent 进度">
+          <div class="agent-panel-head">
+            <div>
+              <div class="agent-kicker">Agent Loop</div>
+              <strong id="agentGoalTitle">Goal</strong>
+            </div>
+            <span id="agentStatusBadge" class="agent-status-badge">idle</span>
+          </div>
+          <div id="agentGoal" class="agent-goal"></div>
+          <div class="agent-grid">
+            <div class="agent-card">
+              <div class="agent-card-title">Plan</div>
+              <div id="agentPlan" class="agent-list"></div>
+            </div>
+            <div class="agent-card">
+              <div class="agent-card-title">Progress</div>
+              <div id="agentProgress" class="agent-list"></div>
+            </div>
+          </div>
+          <div class="agent-footer">
+            <div class="agent-card agent-card-inline">
+              <div class="agent-card-title">Next Action</div>
+              <div id="agentNextAction" class="agent-inline-text"></div>
+            </div>
+            <div class="agent-card agent-card-inline">
+              <div class="agent-card-title">Final Summary</div>
+              <div id="agentFinalSummary" class="agent-inline-text"></div>
+            </div>
+          </div>
+        </section>
+
         <section id="toolPanel" class="tool-panel hidden">
           <div class="tool-panel-header">
             <div>

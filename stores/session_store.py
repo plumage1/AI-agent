@@ -1,6 +1,12 @@
 import json
 
-from agents.langgraph_runtime import clear_thread_state, get_thread_state, update_thread_state
+from agents.langgraph_runtime import (
+    build_default_agent_snapshot,
+    build_default_memory,
+    clear_thread_state,
+    get_thread_state,
+    update_thread_state,
+)
 from core.config import settings
 from core.redis_client import redis_client
 from prompts.job_coach_prompt import SYSTEM_PROMPT
@@ -19,6 +25,8 @@ def create_session() -> dict:
             {"role": "system", "content": SYSTEM_PROMPT}
         ],
         "traces": [],
+        "memory": build_default_memory(),
+        "agent": build_default_agent_snapshot(),
     }
 
 
@@ -51,11 +59,30 @@ def get_session(session_id: str) -> dict:
         stored_session["traces"] = graph_state.get("traces", stored_session.get("traces", []))
         if "interview" in graph_state and graph_state.get("interview") is not None:
             stored_session["interview"] = graph_state.get("interview")
+        if "memory" in graph_state and graph_state.get("memory") is not None:
+            stored_session["memory"] = graph_state.get("memory")
+        if graph_state.get("agent_mode") or graph_state.get("step_history") or graph_state.get("plan_steps"):
+            stored_session["agent"] = {
+                "agent_mode": bool(graph_state.get("agent_mode")),
+                "goal": graph_state.get("user_goal", ""),
+                "task_type": graph_state.get("task_type", ""),
+                "plan": graph_state.get("plan_steps", []),
+                "current_step": None,
+                "step_history": graph_state.get("step_history", []),
+                "agent_status": graph_state.get("agent_status", "idle"),
+                "next_action": graph_state.get("next_action", ""),
+                "artifacts": graph_state.get("artifacts", {}),
+                "final_summary": graph_state.get("final_summary", ""),
+            }
 
     if not stored_session.get("messages"):
         stored_session["messages"] = create_session()["messages"]
     if "traces" not in stored_session:
         stored_session["traces"] = []
+    if "memory" not in stored_session:
+        stored_session["memory"] = build_default_memory()
+    if "agent" not in stored_session:
+        stored_session["agent"] = build_default_agent_snapshot()
 
     if data is None:
         save_session(session_id, stored_session)
@@ -77,7 +104,22 @@ def save_session(session_id: str, session: dict) -> None:
     MEMORY_SESSIONS[session_id] = payload
 
     try:
-        update_thread_state(session_id, {"interview": session.get("interview")})
+        update_thread_state(
+            session_id,
+            {
+                "interview": session.get("interview"),
+                "memory": session.get("memory"),
+                "agent_mode": (session.get("agent") or {}).get("agent_mode", False),
+                "user_goal": (session.get("agent") or {}).get("goal", ""),
+                "task_type": (session.get("agent") or {}).get("task_type", ""),
+                "plan_steps": (session.get("agent") or {}).get("plan", []),
+                "step_history": (session.get("agent") or {}).get("step_history", []),
+                "artifacts": (session.get("agent") or {}).get("artifacts", {}),
+                "agent_status": (session.get("agent") or {}).get("agent_status", "idle"),
+                "next_action": (session.get("agent") or {}).get("next_action", ""),
+                "final_summary": (session.get("agent") or {}).get("final_summary", ""),
+            },
+        )
     except Exception:
         pass
 

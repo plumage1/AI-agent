@@ -36,6 +36,9 @@ class Settings:
     redis_port: int = int(os.getenv("REDIS_PORT", "6379"))
     redis_db: int = int(os.getenv("REDIS_DB", "0"))
     redis_url: str | None = os.getenv("REDIS_URL")
+    redis_enabled: bool = os.getenv("REDIS_ENABLED", "true").strip().lower() not in {"0", "false", "no"}
+    redis_socket_connect_timeout: float = float(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "1"))
+    redis_socket_timeout: float = float(os.getenv("REDIS_SOCKET_TIMEOUT", "1"))
     langgraph_checkpointer_backend: str = os.getenv("LANGGRAPH_CHECKPOINTER_BACKEND", "auto")
 
 

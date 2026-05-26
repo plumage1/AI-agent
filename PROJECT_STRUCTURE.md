@@ -6,7 +6,7 @@ api/
 
 agents/
   langgraph_state.py       LangGraph agent state 定义
-  langgraph_runtime.py     聊天主图：路由、工具执行、trace 和线程状态
+  langgraph_runtime.py     聊天主图：路由、工具执行、agent loop、trace 和线程状态
   career_agent.py          简历、JD、匹配度分析
   interview_agent.py       模拟面试图：出题、评估、追问和面试状态
   job_workflow_agent.py    求职准备图：JD、简历、匹配、RAG 和行动计划
@@ -21,7 +21,7 @@ rag/
   query_planner.py         查询规范化、query variants、同义词扩展
   reranker.py              候选去重、本地 rerank、citation id 生成
   document_loader.py       文档解析，支持 md/txt/pdf/image
-  knowledge_store.py       Markdown 知识库文件管理
+  knowledge_store.py       本地知识库文件管理
   simple_retriever.py      文档切片、chunk_id 和关键词检索
   embedding_retriever.py   本地 embedding 检索
   chroma_store.py          Chroma 向量数据库
@@ -29,42 +29,51 @@ rag/
 
 tools/
   registry.py              工具注册表和 JSON Schema
+  agent_tools.py           Agent 组合能力工具
   learning_tools.py        学习计划工具
   resume_tools.py          简历分析工具
   jd_tools.py              JD 分析工具
   rag_tools.py             RAG 检索工具
 
 stores/
-  session_store.py         会话兼容层，合并 LangGraph 线程状态、面试状态和会话元数据
+  session_store.py         会话兼容层，整合 LangGraph 线程状态、面试状态和 agent snapshot
 
 web/
   index.html               静态前端页面
-  app.js                   前端 API 调用、会话恢复、拖拽附件
+  app.js                   前端 API 调用、会话恢复、Agent 面板
   styles.css               前端样式
 
 data/
   knowledge/               本地知识库文档
-  eval/                    内置评测用例
+  chroma/                  本地向量索引数据
 
 scripts/
-  eval_run.py              命令行评测入口
   redis_ping.py            Redis 连接检查
+
+start.ps1                  Windows 一键启动脚本
+start.bat                  Windows 一键启动入口
 ```
 
 ## 当前主链路
 
 ```text
 用户输入
-  -> session_store 读取会话 / LangGraph 线程快照
-  -> chat graph route_turn
+  -> session_store 读取会话 / LangGraph 线程快照 / agent snapshot
+  -> chat graph classify_request
   -> direct_chat
      or
      model tool planning / local tool routing
-  -> execute_tools
-  -> summarize_tools
+       -> execute_tools
+       -> summarize_tools
+     or
+     build_goal_and_plan
+       -> execute_current_step
+       -> review_step_result
+       -> replan_if_needed
+       -> finalize_answer
   -> LangGraph checkpointer 持久化线程状态
   -> session_store 写回会话元数据
-  -> API / 前端返回答案、工具名、trace、来源引用
+  -> API / 前端返回答案、工具名、trace、来源引用和 agent 状态
 ```
 
 ## RAG 链路
